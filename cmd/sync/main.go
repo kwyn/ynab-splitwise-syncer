@@ -107,7 +107,7 @@ func main() {
 					// Skip any non-negative transactions (aka credits)
 					if tx.Amount < 0 {
 						amount := CentsToDollars(tx.Amount * -1)
-						description := fmt.Sprintf("ID: %s, Category: %s\n Payee: %s\n Memo: %s\n Amount: %.2f\n", tx.ID, categoryName, payeeName, memo, amount)
+						description := fmt.Sprintf("ID: %s\n, Category: %s\n Payee: %s\n Memo: %s\n Amount: %.2f\n", tx.ID, categoryName, payeeName, memo, amount)
 						name := *tx.CategoryName
 						params := splitwise.CreateExpenseParams{
 							"details":     description,
