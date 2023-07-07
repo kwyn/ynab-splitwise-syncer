@@ -1,0 +1,40 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.16
+
+    - name: Build
+      run: go build -v ./...
+
+    - name: Test
+      run: go test -v ./...
+
+    - name: Docker build
+      run: docker build -t your-docker-image .
+
+    - name: Docker push
+      run: |
+        echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+        docker push your-docker-image
+
+    - name: Deploy to Kubernetes
+      run: |
+        kubectl config set-cluster your-cluster --server=${{ secrets.KUBE_SERVER }} --certificate-authority=ca.crt
+        kubectl config set-credentials github-actions --token=${{ secrets.KUBE_TOKEN }}
+        kubectl config set-context default --cluster=your-cluster --user=github-actions
+        kubectl config use-context default
+        kubectl apply -f k8s/
