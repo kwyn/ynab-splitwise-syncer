@@ -7,23 +7,24 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/aanzolaavila/splitwise.go"
-	ynab "github.com/brunomvsouza/ynab.go"
 	"github.com/brunomvsouza/ynab.go/api"
 	"github.com/brunomvsouza/ynab.go/api/transaction"
 	"github.com/joho/godotenv"
+	ynabCache "github.com/kwyn/ynab-splitwise-sync/pkg/ynab"
 )
 
 const (
-	NAMESPACE           = "ynab-splitwise"
-	LAST_SYNC_CONFIGMAP = "last-sync-date"
-	SPLITWISE_GROUP     = 5600408
-	KWYN_ID             = 4965744
-	SPANG_ID            = 573994
-	CATEGORY_GROUP_NAME = "Shared"
-	TIMELAYOUT          = "2006-01-02"
+	NAMESPACE                  = "ynab-splitwise"
+	LAST_SYNC_CONFIGMAP        = "last-sync-date"
+	SPLITWISE_GROUP            = 5600408
+	KWYN_ID                    = 4965744
+	SPANG_ID                   = 573994
+	SHARED_CATEGORY_GROUP_NAME = "Shared"
+	TIMELAYOUT                 = "2006-01-02"
 )
 
 func main() {
@@ -43,11 +44,11 @@ func main() {
 	}
 
 	// Setup variables from .env
-	token := os.Getenv("YNAB_TOKEN")
+	ynabToken := os.Getenv("YNAB_TOKEN")
 	budgetID := os.Getenv("YNAB_BUDGET_ID")
 	splitwiseAPIKey := os.Getenv("SPLITWISE_KEY")
 
-	if token == "" {
+	if ynabToken == "" {
 		log.Fatal("YNAB_TOKEN is required")
 	}
 
@@ -63,81 +64,83 @@ func main() {
 	fmt.Printf("Last Sync Date: %s\n", lastSyncDate.Format(TIMELAYOUT))
 
 	// Initialize the YNAB client
-	client := ynab.NewClient(token)
+	ynabClient := ynabCache.NewCachedClient(ynabToken, budgetID)
 
 	// Initialize the Slitwise Client
 	splitwiseClient := splitwise.Client{
 		Token: splitwiseAPIKey,
 	}
-	categoryMap := getBespokeCategoryMap()
-	// Fetch the categories
-	categories, err := client.Category().GetCategories(budgetID, nil)
-	if err != nil {
-		log.Fatalf("Failed to fetch categories: %v", err)
+	if false {
+		fmt.Println(splitwiseClient.BaseUrl)
 	}
-	// Iterate over the categories and fetch transactions for each category in the desired category group
-	for _, categoryGroup := range categories.GroupWithCategories {
-		fmt.Println(categoryGroup.Name)
-		if categoryGroup.Name == CATEGORY_GROUP_NAME {
-			for _, category := range categoryGroup.Categories {
-				fmt.Printf("Category Name and ID %s: %s\n", category.Name, category.ID)
+	f := &transaction.Filter{
+		Since: &api.Date{lastSyncDate},
+	}
 
-				f := &transaction.Filter{
-					Since: &api.Date{lastSyncDate},
-				}
-				transactions, err := client.Transaction().GetTransactionsByCategory(budgetID, category.ID, f)
-				if err != nil {
-					log.Fatalf("Failed to fetch transactions for category %s: %v", category.ID, err)
-				}
-
-				for _, tx := range transactions {
-					var categoryName, payeeName, memo string
-
-					// Check if the pointers are nil before dereferencing them
-					if tx.CategoryName != nil {
-						categoryName = *tx.CategoryName
-					}
-					if tx.PayeeName != nil {
-						payeeName = *tx.PayeeName
-					}
-					if tx.Memo != nil {
-						memo = *tx.Memo
-					}
-
-					// Skip any non-negative transactions (aka credits)
-					if tx.Amount < 0 {
-						amount := CentsToDollars(tx.Amount * -1)
-						description := fmt.Sprintf("ID: %s\n, Category: %s\n Payee: %s\n Memo: %s\n Amount: %.2f\n", tx.ID, categoryName, payeeName, memo, amount)
-						name := *tx.CategoryName
-						params := splitwise.CreateExpenseParams{
-							"details":     description,
-							"date":        tx.Date.Format(TIMELAYOUT),
-							"category_id": categoryMap[category.ID]}
-
-						if *dryRun {
-							// If dry-run is enabled, just log the information
-							log.Printf("Will create expense with name: %s, amount: %f, params: %v\n", name, amount, params)
-						} else {
-							// If dry-run is not enabled, make the actual API call
-							_, err := splitwiseClient.CreateExpenseEqualGroupSplit(ctx, amount, name, SPLITWISE_GROUP, params)
-							if err != nil {
-								fmt.Fprintf(os.Stderr, "could not create expense: %v", err)
-							}
-						}
-					}
-
-				}
+	// Fetch all transactions for the budget
+	allTransactions, err := ynabClient.GetTransactions(f)
+	if err != nil {
+		log.Fatalf("Failed to fetch transactions: %v", err)
+	}
+	categoryGroupMap, err := ynabClient.CategoryGroupMap()
+	if err != nil {
+		log.Fatalf("failed to fetch category group map")
+	}
+	// Filter transactions that contain the string "splitwise" (case-insensitive)
+	for _, tx := range allTransactions {
+		if tx.Cleared == transaction.ClearingStatusCleared {
+			if (tx.CategoryID != nil && categoryGroupMap[*tx.CategoryID] == SHARED_CATEGORY_GROUP_NAME) || (tx.Memo != nil && strings.Contains(strings.ToLower(*tx.Memo), "splitwise")) {
+				// Your logic for handling transactions that contain "splitwise"
+				CreateSplitwiseTxn(ctx, &splitwiseClient, tx, *tx.CategoryID, *dryRun)
 			}
 		}
-
 	}
+
 	if !*dryRun {
 		err = UpdateLastSyncDate("last-sync-date.txt")
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
+}
 
+func CreateSplitwiseTxn(ctx context.Context, splitwiseClient *splitwise.Client, tx *transaction.Transaction, categoryID string, dryRun bool) {
+	var categoryName, payeeName, memo string
+
+	// Check if the pointers are nil before dereferencing them
+	if tx.CategoryName != nil {
+		categoryName = *tx.CategoryName
+	}
+	if tx.PayeeName != nil {
+		payeeName = *tx.PayeeName
+	}
+	if tx.Memo != nil {
+		memo = *tx.Memo
+	}
+
+	categoryMap := getBespokeCategoryMap()
+	// Skip any non-negative transactions (aka credits)
+	if tx.Amount < 0 {
+		amount := CentsToDollars(tx.Amount * -1)
+		description := fmt.Sprintf("ID: %s\n, Category: %s\n Payee: %s\n Memo: %s\n Amount: %.2f\n", tx.ID, categoryName, payeeName, memo, amount)
+		name := *tx.CategoryName
+		params := splitwise.CreateExpenseParams{
+			"details":     description,
+			"date":        tx.Date.Format(TIMELAYOUT),
+			"category_id": categoryMap[categoryID]}
+
+		if dryRun {
+			// If dry-run is enabled, just log the information
+			// log.Printf("Will create expense with name: %s, amount: %f, params: %v\n", name, amount, params)
+			log.Printf("Will create expense with name: %s, amount: %f, description: %v\n", name, amount, description)
+		} else {
+			// If dry-run is not enabled, make the actual API call
+			_, err := splitwiseClient.CreateExpenseEqualGroupSplit(ctx, amount, name, SPLITWISE_GROUP, params)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "could not create expense: %v", err)
+			}
+		}
+	}
 }
 
 // GetLastSyncDate retrieves the last synchronized date from a file
@@ -155,6 +158,7 @@ func GetLastSyncDate(filename string) (time.Time, error) {
 
 	// Read the file
 	data, err := ioutil.ReadFile(filename)
+
 	if err != nil {
 		return time.Time{}, nil
 	}
