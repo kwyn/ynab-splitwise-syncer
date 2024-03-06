@@ -18,11 +18,8 @@ import (
 )
 
 const (
-	NAMESPACE                  = "ynab-splitwise"
 	LAST_SYNC_CONFIGMAP        = "last-sync-date"
 	SPLITWISE_GROUP            = 5600408
-	KWYN_ID                    = 4965744
-	SPANG_ID                   = 573994
 	SHARED_CATEGORY_GROUP_NAME = "Shared"
 	TIMELAYOUT                 = "2006-01-02"
 )
@@ -135,7 +132,8 @@ func CreateSplitwiseTxn(ctx context.Context, splitwiseClient *splitwise.Client, 
 			log.Printf("Will create expense with name: %s, amount: %f, description: %v\n", name, amount, description)
 		} else {
 			// If dry-run is not enabled, make the actual API call
-			_, err := splitwiseClient.CreateExpenseEqualGroupSplit(ctx, amount, name, SPLITWISE_GROUP, params)
+			resp, err := splitwiseClient.CreateExpenseEqualGroupSplit(ctx, amount, name, SPLITWISE_GROUP, params)
+			fmt.Println(resp)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "could not create expense: %v", err)
 			}
@@ -199,6 +197,9 @@ func getBespokeCategoryMap() map[string]int {
 		"381373d1-56d3-4929-bb4c-c19abb41b8e6": 17, // Cabin Maintence: Maintence
 		"9b8a7501-2aa8-42e1-93dc-68cc8a6a1e95": 37, // Cabin Trash: Trash
 		"139acc44-1191-4c55-9768-b3a859bbf9a6": 12, // Groceries:
+		"351520fd-4d45-4453-ae16-ad5571b59221": 13, // Restaraunts: Dining Out
+		"e90d2f8d-88c0-479d-9e5c-50811375ea69": 35, // Vacation: Transportation Plane
+		"ea5f7fb9-64a8-42b0-9adf-d4a5b092b36f": 34, // Transportaiton: Transportation (Other)
 		"70954a26-5c5b-4483-8e62-06af2a76d4df": 7,  // Cabin Water: Water
 		"bf72c56f-8041-4000-b72d-93ad9fb44931": 4,  // Oakland Mortgage: Mortgage
 		"5cc4da89-36e3-4f55-90a7-9853a958feae": 8,  // Apple TV+ : TV
