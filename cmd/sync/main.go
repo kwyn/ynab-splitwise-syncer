@@ -190,6 +190,7 @@ func CentsToDollars(cents int64) float64 {
 	return float64(cents) / 1000.0
 }
 
+// Custom mapping from category icons found from splitwise: https://secure.splitwise.com/api/v3.0/get_categories
 func getBespokeCategoryMap() map[string]int {
 	return map[string]int{
 		"60037d9a-1a2e-4960-b067-f9d5d548d8ec": 1,  // Amazon Prime: Utilities
