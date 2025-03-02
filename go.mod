@@ -32,7 +32,7 @@ require (
 )
 
 require (
-	github.com/brunomvsouza/ynab.go v1.4.0 // indirect
+	github.com/brunomvsouza/ynab.go v1.5.0 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/google/gofuzz v1.1.0 // indirect
