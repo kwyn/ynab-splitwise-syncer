@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -93,6 +92,8 @@ func main() {
 		}
 	}
 
+	fmt.Printf("Last Sync Date: %s\n", lastSyncDate.Format(TIMELAYOUT))
+
 	if !*dryRun {
 		err = UpdateLastSyncDate("last-sync-date.txt")
 		if err != nil {
@@ -121,15 +122,16 @@ func CreateSplitwiseTxn(ctx context.Context, splitwiseClient *splitwise.Client, 
 		amount := CentsToDollars(tx.Amount * -1)
 		description := fmt.Sprintf("ID: %s\n, Category: %s\n Payee: %s\n Memo: %s\n Amount: %.2f\n", tx.ID, categoryName, payeeName, memo, amount)
 		name := *tx.CategoryName
+		date := tx.Date.Format(TIMELAYOUT)
 		params := splitwise.CreateExpenseParams{
 			"details":     description,
-			"date":        tx.Date.Format(TIMELAYOUT),
+			"date":        date,
 			"category_id": categoryMap[categoryID]}
 
 		if dryRun {
 			// If dry-run is enabled, just log the information
 			// log.Printf("Will create expense with name: %s, amount: %f, params: %v\n", name, amount, params)
-			log.Printf("Will create expense with name: %s, amount: %f, description: %v\n", name, amount, description)
+			log.Printf("Will create expense with %s date, name: %s, amount: %f, description: %v\n", date, name, amount, description)
 		} else {
 			// If dry-run is not enabled, make the actual API call
 			resp, err := splitwiseClient.CreateExpenseEqualGroupSplit(ctx, amount, name, SPLITWISE_GROUP, params)
@@ -155,7 +157,7 @@ func GetLastSyncDate(filename string) (time.Time, error) {
 	}
 
 	// Read the file
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 
 	if err != nil {
 		return time.Time{}, nil
@@ -177,7 +179,7 @@ func UpdateLastSyncDate(filename string) error {
 	currentDate := time.Now().Format("2006-01-02")
 
 	// Write the current date to the file
-	err := ioutil.WriteFile(filename, []byte(currentDate), 0644)
+	err := os.WriteFile(filename, []byte(currentDate), 0644)
 	if err != nil {
 		return err
 	}

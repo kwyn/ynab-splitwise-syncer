@@ -3,7 +3,6 @@ package ynab
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -56,12 +55,12 @@ func (c *CachedClient) saveToCache(apiCall string, data []byte) error {
 	if err := c.ensureCacheFolderExists(); err != nil {
 		return err
 	}
-	return ioutil.WriteFile(c.formatCacheName(apiCall), data, 0644)
+	return os.WriteFile(c.formatCacheName(apiCall), data, 0644)
 }
 
 func (c *CachedClient) readFromCache(apiCall string) ([]byte, error) {
 
-	return ioutil.ReadFile(c.formatCacheName(apiCall))
+	return os.ReadFile(c.formatCacheName(apiCall))
 }
 
 func (c *CachedClient) CategoryGroupMap() (map[string]string, error) {
