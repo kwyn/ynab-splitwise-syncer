@@ -1,3 +1,4 @@
 .env
 ynab_cache
 last-sync-date.txt
+ynab-splitwise-sync
